@@ -1,0 +1,123 @@
+//Constants differ for each robot!
+#define KP 40000
+#define LEFT_MOTOR OUT_A
+#define RIGHT_MOTOR OUT_C
+#define WHEEL_DIAMETER 5.6
+#define TRACK_WIDTH 14.1
+#define POWER 70
+
+float power_left;
+float power_right;
+long ref_tick;
+
+// Resets and prepares for a maneuver
+// Called just before a maneuver starts
+void StartNav()
+{
+    ref_tick = CurrentTick();
+    ResetTachoCount(LEFT_MOTOR);
+    ResetTachoCount(RIGHT_MOTOR);
+    Yield();
+}
+
+// Adjusts motor outputs to correct error
+void UpdateNav()
+{ 
+    float steer = KP * (MotorTachoCount(LEFT_MOTOR) / power_left - MotorTachoCount(RIGHT_MOTOR) / power_right) / (CurrentTick() - ref_tick);
+    int output_left = power_left - (power_left < 0 ? -1 : 1) * steer;
+    output_left = output_left > 100 ? 100 : output_left < -100 ? -100 : output_left;  // Ensures -100 <= power <= 100
+    int output_right = power_right + (power_right < 0 ? -1 : 1) * steer;
+    output_right = output_right > 100 ? 100 : output_right < -100 ? -100 : output_right;  // Ensures -100 <= power <= 100
+    
+    OnFwdEx(LEFT_MOTOR, output_left, RESET_NONE);
+    OnFwdEx(RIGHT_MOTOR, output_right, RESET_NONE);
+    Yield();
+}
+
+// Navigates the robot in a straight line through a certain distance (in centimeters)
+// distance >= 0 : Forward
+// distance < 0 : Reverse
+void MoveLine(float distance)
+{
+    power_left = power_right = distance < 0 ? -POWER : POWER;
+    
+    StartNav();
+    
+    int rots = distance * 360 / PI / WHEEL_DIAMETER;
+        
+    if (distance >= 0)
+        while(MotorTachoCount(LEFT_MOTOR) < rots)
+            UpdateNav();
+    else
+        while(MotorTachoCount(LEFT_MOTOR) > rots)
+            UpdateNav();
+            
+    Off(LEFT_MOTOR);
+    Off(RIGHT_MOTOR);
+}
+
+// Navigates the robot through an arc a specified radius (in centimeters)
+// subtending a specified angle (in centimeters)
+// radius >= 0 : To the right
+// radius < 0 : To the left
+// angle >= 0 : Forward arc
+// angle < 0 : Reverse arc
+void MoveArc(float radius, float angle)
+{
+    int sign_angle = angle < 0 ? -1 : angle > 0 ? 1 : 0;
+    
+    if (radius >= 0)
+    {
+        power_left = sign_angle * POWER;
+        power_right = sign_angle * POWER * (radius - TRACK_WIDTH / 2) / (radius + TRACK_WIDTH / 2);
+    }
+    else
+    {
+        power_right = sign_angle * POWER;
+        power_left = sign_angle * POWER * (abs(radius) - TRACK_WIDTH / 2) / (abs(radius) + TRACK_WIDTH / 2);
+    }
+
+    StartNav();
+    
+    int rots = (abs(radius) + TRACK_WIDTH / 2) * angle * (360 / PI / WHEEL_DIAMETER);
+
+    if (radius >= 0)
+        if (angle >= 0)
+            while(MotorTachoCount(LEFT_MOTOR) < rots)
+                UpdateNav();
+        else
+            while(MotorTachoCount(LEFT_MOTOR) > rots)
+                UpdateNav();
+    else
+        if (angle >= 0)
+            while(MotorTachoCount(RIGHT_MOTOR) < rots)
+                UpdateNav();
+        else
+            while(MotorTachoCount(RIGHT_MOTOR) > rots)
+                UpdateNav();
+   
+    Off(LEFT_MOTOR);
+    Off(RIGHT_MOTOR);
+}
+
+// Navigates the robot through an arc to a relative position specified by a
+// horizontal offset x (in centimeters) and vertical offset y (in centimeters)
+// x >= 0 : to the right
+// x < 0: to the left
+// y >= 0 : forward
+// y < 0 : reverse
+void ShiftPosition(float x, float y)
+{
+    float radius =  abs((x * x + y * y) / (2 * x));
+    float angle = abs(2 * asin(sqrt(x * x + y * y) / 2 / radius));
+    if (x >= 0)
+        if (y >= 0)
+            MoveArc(radius, angle);
+        else
+            MoveArc(radius, -angle);
+    else
+        if (y >= 0)
+            MoveArc(-radius, angle);
+        else
+            MoveArc(-radius, -angle);
+}
