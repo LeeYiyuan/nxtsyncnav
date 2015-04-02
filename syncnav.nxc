@@ -1,10 +1,10 @@
 //Constants differ for each robot!
-#define KP 40000
+#define KP 500
 #define LEFT_MOTOR OUT_A
 #define RIGHT_MOTOR OUT_C
 #define WHEEL_DIAMETER 5.6
-#define TRACK_WIDTH 14.1
-#define POWER 70
+#define TRACK_WIDTH 12.3
+#define POWER 50
 
 float power_left;
 float power_right;
@@ -23,12 +23,16 @@ void StartNav()
 // Adjusts motor outputs to correct error
 void UpdateNav()
 { 
-    float steer = KP * (MotorTachoCount(LEFT_MOTOR) / power_left - MotorTachoCount(RIGHT_MOTOR) / power_right) / (CurrentTick() - ref_tick);
-    int output_left = power_left - (power_left < 0 ? -1 : 1) * steer;
+    // P controller output
+    float controller_output = KP * (MotorTachoCount(LEFT_MOTOR) / power_left - MotorTachoCount(RIGHT_MOTOR) / power_right) / (CurrentTick() - ref_tick);
+    
+    // Motor power output
+    int output_left = power_left - controller_output * power_left;
     output_left = output_left > 100 ? 100 : output_left < -100 ? -100 : output_left;  // Ensures -100 <= power <= 100
-    int output_right = power_right + (power_right < 0 ? -1 : 1) * steer;
+    int output_right = power_right + controller_output * power_right;
     output_right = output_right > 100 ? 100 : output_right < -100 ? -100 : output_right;  // Ensures -100 <= power <= 100
     
+    // Apply motor power output
     OnFwdEx(LEFT_MOTOR, output_left, RESET_NONE);
     OnFwdEx(RIGHT_MOTOR, output_right, RESET_NONE);
     Yield();
@@ -106,7 +110,7 @@ void MoveArc(float radius, float angle)
 // x < 0: to the left
 // y >= 0 : forward
 // y < 0 : reverse
-void ShiftPosition(float x, float y)
+void PositionShift(float x, float y)
 {
     float radius =  abs((x * x + y * y) / (2 * x));
     float angle = abs(2 * asin(sqrt(x * x + y * y) / 2 / radius));

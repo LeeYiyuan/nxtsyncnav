@@ -4,8 +4,5 @@ task main()
 { 
     // Robot moves along an imaginary running track.
         
-    MoveLine(50);
-    MoveArc(15, PI);
-    MoveLine(50);
-    MoveArc(15, PI);
+    PositionShift(-60, -60);
 }
